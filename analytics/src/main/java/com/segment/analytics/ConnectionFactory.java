@@ -24,6 +24,7 @@
 package com.segment.analytics;
 
 import android.util.Base64;
+
 import com.segment.analytics.core.BuildConfig;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -36,6 +37,7 @@ import java.net.URL;
  */
 public class ConnectionFactory {
 
+  private static final String ANALYTICS_API_BASE = "https://analytics.tryfi.com/v1";
   private static final int DEFAULT_READ_TIMEOUT_MILLIS = 20 * 1000; // 20s
   private static final int DEFAULT_CONNECT_TIMEOUT_MILLIS = 15 * 1000; // 15s
   static final String USER_AGENT = "analytics-android/" + BuildConfig.VERSION_NAME;
@@ -44,18 +46,12 @@ public class ConnectionFactory {
     return "Basic " + Base64.encodeToString((writeKey + ":").getBytes(), Base64.NO_WRAP);
   }
 
-  /** Return a {@link HttpURLConnection} that reads JSON formatted project settings. */
-  public HttpURLConnection projectSettings(String writeKey) throws IOException {
-    return openConnection("https://cdn-settings.segment.com/v1/projects/" + writeKey + "/settings");
-  }
-
   /**
-   * Return a {@link HttpURLConnection} that writes batched payloads to {@code
-   * https://api.segment.io/v1/import}.
+   * Return a {@link HttpURLConnection} that writes batched payloads..
    */
   public HttpURLConnection upload(String writeKey) throws IOException {
-    HttpURLConnection connection = openConnection("https://api.segment.io/v1/import");
-    connection.setRequestProperty("Authorization", authorizationHeader(writeKey));
+    HttpURLConnection connection = openConnection(ANALYTICS_API_BASE + "/batch");
+//    connection.setRequestProperty("Authorization", authorizationHeader(writeKey));
     connection.setRequestProperty("Content-Encoding", "gzip");
     connection.setDoOutput(true);
     connection.setChunkedStreamingMode(0);
@@ -63,21 +59,20 @@ public class ConnectionFactory {
   }
 
   /**
-   * Return a {@link HttpURLConnection} that writes gets attribution information from {@code
-   * https://mobile-service.segment.com/attribution}.
+   * Return a {@link HttpURLConnection} that writes gets attribution information.
    */
   public HttpURLConnection attribution(String writeKey) throws IOException {
-    HttpURLConnection connection =
-        openConnection("https://mobile-service.segment.com/v1/attribution");
-    connection.setRequestProperty("Authorization", authorizationHeader(writeKey));
+    HttpURLConnection connection = openConnection(ANALYTICS_API_BASE + "/t");
+//    connection.setRequestProperty("Authorization", authorizationHeader(writeKey));
+    connection.setRequestProperty("Content-Encoding", "gzip");
     connection.setRequestMethod("POST");
     connection.setDoOutput(true);
     return connection;
   }
 
   /**
-   * Configures defaults for connections opened with {@link #upload(String)}, {@link
-   * #attribution(String)} and {@link #projectSettings(String)}.
+   * Configures defaults for connections opened with {@link #upload(String)} and {@link
+   * #attribution(String)}.
    */
   protected HttpURLConnection openConnection(String url) throws IOException {
     URL requestedURL;
@@ -93,6 +88,7 @@ public class ConnectionFactory {
     connection.setReadTimeout(DEFAULT_READ_TIMEOUT_MILLIS);
     connection.setRequestProperty("Content-Type", "application/json");
     connection.setRequestProperty("User-Agent", USER_AGENT);
+    connection.setRequestProperty("Origin", "mobile://android");
     connection.setDoInput(true);
     return connection;
   }

@@ -103,16 +103,6 @@ class Client {
     return createPostConnection(connection);
   }
 
-  Connection fetchSettings() throws IOException {
-    HttpURLConnection connection = connectionFactory.projectSettings(writeKey);
-    int responseCode = connection.getResponseCode();
-    if (responseCode != HTTP_OK) {
-      connection.disconnect();
-      throw new IOException("HTTP " + responseCode + ": " + connection.getResponseMessage());
-    }
-    return createGetConnection(connection);
-  }
-
   /** Represents an HTTP exception thrown for unexpected/non 2xx response codes. */
   static class HTTPException extends IOException {
     final int responseCode;

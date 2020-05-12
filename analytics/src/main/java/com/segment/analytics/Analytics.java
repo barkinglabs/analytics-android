@@ -252,26 +252,15 @@ public class Analytics {
         new Runnable() {
           @Override
           public void run() {
-            projectSettings = getSettings();
-            if (isNullOrEmpty(projectSettings)) {
-              // Backup mode - Enable just the Segment integration.
-              // {
-              //   integrations: {
-              //     Segment.io: {
-              //       apiKey: "{writeKey}"
-              //     }
-              //   }
-              // }
-              projectSettings =
-                  ProjectSettings.create(
-                      new ValueMap() //
-                          .putValue(
-                              "integrations",
-                              new ValueMap()
-                                  .putValue(
-                                      "Segment.io",
-                                      new ValueMap().putValue("apiKey", Analytics.this.writeKey))));
-            }
+            projectSettings =
+                ProjectSettings.create(
+                    new ValueMap() //
+                        .putValue(
+                            "integrations",
+                            new ValueMap()
+                                .putValue(
+                                    "Segment.io",
+                                    new ValueMap().putValue("apiKey", Analytics.this.writeKey))));
             HANDLER.post(
                 new Runnable() {
                   @Override
@@ -412,14 +401,9 @@ public class Analytics {
 
   // Analytics API
 
-  /** @see #identify(String, Traits, Options) */
+  /** @see #identify(String, Traits) */
   public void identify(@NonNull String userId) {
-    identify(userId, null, null);
-  }
-
-  /** @see #identify(String, Traits, Options) */
-  public void identify(@NonNull Traits traits) {
-    identify(null, traits, null);
+    identify(userId, null);
   }
 
   /**
@@ -427,20 +411,17 @@ public class Analytics {
    * also lets you record {@code traits} about the user, like their email, name, account type, etc.
    *
    * <p>Traits and userId will be automatically cached and available on future sessions for the same
-   * user. To update a trait on the server, call identify with the same user id (or null). You can
-   * also use {@link #identify(Traits)} for this purpose.
+   * user. To update a trait on the server, call identify with the same user id (or null).
    *
    * @param userId Unique identifier which you recognize a user by in your own database. If this is
    *     null or empty, any previous id we have (could be the anonymous id) will be used.
    * @param newTraits Traits about the user.
-   * @param options To configure the call.
    * @throws IllegalArgumentException if both {@code userId} and {@code newTraits} are not provided
    * @see <a href="https://segment.com/docs/spec/identify/">Identify Documentation</a>
    */
   public void identify(
       final @Nullable String userId,
-      final @Nullable Traits newTraits,
-      final @Nullable Options options) {
+      final @Nullable Traits newTraits) {
     assertNotShutdown();
     if (isNullOrEmpty(userId) && isNullOrEmpty(newTraits)) {
       throw new IllegalArgumentException("Either userId or some traits must be provided.");
@@ -460,17 +441,6 @@ public class Analytics {
 
             traitsCache.set(traits); // Save the new traits
             analyticsContext.setTraits(traits); // Update the references
-
-            final Options finalOptions;
-            if (options == null) {
-              finalOptions = defaultOptions;
-            } else {
-              finalOptions = options;
-            }
-
-            IdentifyPayload.Builder builder =
-                new IdentifyPayload.Builder().traits(traitsCache.get());
-            fillAndEnqueue(builder, finalOptions);
           }
         });
   }
@@ -1353,62 +1323,6 @@ public class Analytics {
           crypto,
           middlewares);
     }
-  }
-
-  // Handler Logic.
-  private static final long SETTINGS_REFRESH_INTERVAL = 1000 * 60 * 60 * 24; // 24 hours
-  private static final long SETTINGS_RETRY_INTERVAL = 1000 * 60; // 1 minute
-
-  private ProjectSettings downloadSettings() {
-    try {
-      ProjectSettings projectSettings =
-          networkExecutor
-              .submit(
-                  new Callable<ProjectSettings>() {
-                    @Override
-                    public ProjectSettings call() throws Exception {
-                      Client.Connection connection = null;
-                      try {
-                        connection = client.fetchSettings();
-                        Map<String, Object> map = cartographer.fromJson(buffer(connection.is));
-                        return ProjectSettings.create(map);
-                      } finally {
-                        closeQuietly(connection);
-                      }
-                    }
-                  })
-              .get();
-      projectSettingsCache.set(projectSettings);
-      return projectSettings;
-    } catch (InterruptedException e) {
-      logger.error(e, "Thread interrupted while fetching settings.");
-    } catch (ExecutionException e) {
-      logger.error(e, "Unable to fetch settings. Retrying in %s ms.", SETTINGS_RETRY_INTERVAL);
-    }
-    return null;
-  }
-
-  /**
-   * Retrieve settings from the cache or the network: 1. If the cache is empty, fetch new settings.
-   * 2. If the cache is not stale, use it. 2. If the cache is stale, try to get new settings.
-   */
-  @Private
-  ProjectSettings getSettings() {
-    ProjectSettings cachedSettings = projectSettingsCache.get();
-    if (isNullOrEmpty(cachedSettings)) {
-      return downloadSettings();
-    }
-
-    long expirationTime = cachedSettings.timestamp() + SETTINGS_REFRESH_INTERVAL;
-    if (expirationTime > System.currentTimeMillis()) {
-      return cachedSettings;
-    }
-
-    ProjectSettings downloadedSettings = downloadSettings();
-    if (isNullOrEmpty(downloadedSettings)) {
-      return cachedSettings;
-    }
-    return downloadedSettings;
   }
 
   void performInitializeIntegrations(ProjectSettings projectSettings) throws AssertionError {
